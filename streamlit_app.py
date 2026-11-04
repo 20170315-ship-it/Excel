@@ -1,36 +1,16 @@
-import sys
-import subprocess
-
-# --- 1. VERIFICACIÓN E INSTALACIÓN AUTOMÁTICA DE DEPENDENCIAS ---
-# Lista de paquetes externos necesarios para la aplicación
-PAQUETES_REQUERIDOS = ["streamlit", "pandas", "openpyxl"]
-
-def instalar_si_falta(paquetes):
-    """Instala automáticamente los paquetes faltantes en el entorno ejecutor."""
-    for paquete in paquetes:
-        try:
-            __import__(paquete)
-        except ImportError:
-            # Ejecuta 'pip install' dentro del entorno de Python en ejecución
-            subprocess.check_call([sys.executable, "-m", "pip", "install", paquete])
-
-# Ejecutar la verificación antes de importar las librerías principales
-instalar_si_falta(PAQUETES_REQUERIDOS)
-
-# --- 2. IMPORTACIÓN DE LIBRERÍAS ---
+Python
 import io
 import os
 import re
 import pandas as pd
 import streamlit as st
 
-# --- 3. CONFIGURACIÓN E INTERFAZ DE STREAMLIT ---
+# Configuración inicial de la página
 st.set_page_config(
-    page_title="Combinador de Archivos Excel", 
-    page_icon="📊", 
-    layout="centered"
+    page_title="Combinador de Archivos Excel", page_icon="📊", layout="centered"
 )
 
+# Título y descripción principal
 st.title("📊 Combinador de Hojas Excel")
 st.write(
     "Carga múltiples archivos Excel para consolidar sus hojas en un único archivo de salida."
@@ -45,14 +25,14 @@ def sanitizar_nombre_hoja(nombre: str) -> str:
     return nombre_limpio[:31]
 
 
-# --- 4. CARGA DE ARCHIVOS ---
+# 1. SECCIÓN DE CARGA DE ARCHIVOS
 uploaded_files = st.file_uploader(
     "Selecciona o arrastra los archivos Excel (.xlsx, .xls)",
     type=["xlsx", "xls"],
     accept_multiple_files=True,
 )
 
-# --- 5. CONFIRMACIÓN Y PREVISUALIZACIÓN ---
+# 2. CONFIRMACIÓN Y PREVISUALIZACIÓN DE ARCHIVOS CARGADOS
 if uploaded_files:
     st.success(
         f"✅ Se han cargado **{len(uploaded_files)}** archivo(s) correctamente."
@@ -62,11 +42,11 @@ if uploaded_files:
         for file in uploaded_files:
             st.write(f"- `{file.name}`")
 
-    # --- 6. PROCESAMIENTO Y COMBINACIÓN DE HOJAS ---
+    # 3. BOTÓN DE PROCESAMIENTO Y COMBINACIÓN DE HOJAS
     if st.button("🚀 Procesar y combinar archivos", type="primary"):
         with st.spinner("Procesando los archivos Excel..."):
 
-            # Buffer en memoria RAM para no crear archivos temporales en disco
+            # Buffer en memoria RAM para construir el archivo final
             output_buffer = io.BytesIO()
 
             # Escritor de pandas especificando el motor openpyxl
@@ -116,7 +96,7 @@ if uploaded_files:
 
             output_buffer.seek(0)
 
-            # --- 7. DESCARGA DEL ARCHIVO GENERADO ---
+            # 4. SALIDA Y BOTÓN DE DESCARGA
             st.success("🎉 ¡Procesamiento completado con éxito!")
 
             st.download_button(
