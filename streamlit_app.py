@@ -11,6 +11,8 @@ import re
 import pandas as pd
 import streamlit as st
 
+pip install streamlit pandas openpyxl
+
 # Configuración inicial de la página
 st.set_page_config(
     page_title="Combinador de Archivos Excel", page_icon="📊", layout="centered"
