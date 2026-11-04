@@ -1,93 +1,104 @@
-import streamlit as st
+import sys
+import subprocess
 
-st.title("🎈 Combinar Excel")
-st.write(
-    "Let's start building! For help and inspiration, head over to [docs.streamlit.io](https://docs.streamlit.io/)."
-)
+# --- 1. VERIFICACIÓN E INSTALACIÓN AUTOMÁTICA DE DEPENDENCIAS ---
+# Lista de paquetes externos necesarios para la aplicación
+PAQUETES_REQUERIDOS = ["streamlit", "pandas", "openpyxl"]
 
+def instalar_si_falta(paquetes):
+    """Instala automáticamente los paquetes faltantes en el entorno ejecutor."""
+    for paquete in paquetes:
+        try:
+            __import__(paquete)
+        except ImportError:
+            # Ejecuta 'pip install' dentro del entorno de Python en ejecución
+            subprocess.check_call([sys.executable, "-m", "pip", "install", paquete])
+
+# Ejecutar la verificación antes de importar las librerías principales
+instalar_si_falta(PAQUETES_REQUERIDOS)
+
+# --- 2. IMPORTACIÓN DE LIBRERÍAS ---
 import io
 import os
 import re
 import pandas as pd
 import streamlit as st
 
-# Configuración inicial de la página
+# --- 3. CONFIGURACIÓN E INTERFAZ DE STREAMLIT ---
 st.set_page_config(
-    page_title="Combinador de Archivos Excel", page_icon="📊", layout="centered"
+    page_title="Combinador de Archivos Excel", 
+    page_icon="📊", 
+    layout="centered"
 )
 
-# Título y descripción principal
 st.title("📊 Combinador de Hojas Excel")
 st.write(
     "Carga múltiples archivos Excel para consolidar sus hojas en un único archivo de salida."
 )
 
 
-# Función para limpiar y adaptar los nombres de las pestañas a los límites de Excel
+# Función para sanitizar y ajustar nombres de pestañas al estándar de Excel
 def sanitizar_nombre_hoja(nombre: str) -> str:
-    # 1. Eliminar caracteres no permitidos por Excel en los nombres de pestaña (\ / ? * : [ ])
+    # Eliminar caracteres no permitidos por Excel (\ / ? * : [ ])
     nombre_limpio = re.sub(r"[\\/*?:\[\]]", "_", nombre)
-    # 2. Recortar el nombre a un máximo de 31 caracteres (límite estricto de Excel)
+    # Recortar al límite estricto de 31 caracteres de Excel
     return nombre_limpio[:31]
 
 
-# 1. SECCIÓN DE CARGA DE ARCHIVOS
+# --- 4. CARGA DE ARCHIVOS ---
 uploaded_files = st.file_uploader(
     "Selecciona o arrastra los archivos Excel (.xlsx, .xls)",
     type=["xlsx", "xls"],
-    accept_multiple_files=True,  # Permite seleccionar múltiples archivos simultáneamente
+    accept_multiple_files=True,
 )
 
-# 2. CONFIRMACIÓN Y PREVISUALIZACIÓN DE ARCHIVOS CARGADOS
+# --- 5. CONFIRMACIÓN Y PREVISUALIZACIÓN ---
 if uploaded_files:
-    # Mensaje de confirmación de carga correcta
     st.success(
         f"✅ Se han cargado **{len(uploaded_files)}** archivo(s) correctamente."
     )
 
-    # Mostrar la lista detallada de los archivos listos para procesar
     with st.expander("📄 Ver lista de archivos cargados"):
         for file in uploaded_files:
             st.write(f"- `{file.name}`")
 
-    # 3. BOTÓN DE PROCESAMIENTO Y LÓGICA DE COMBINACIÓN
+    # --- 6. PROCESAMIENTO Y COMBINACIÓN DE HOJAS ---
     if st.button("🚀 Procesar y combinar archivos", type="primary"):
         with st.spinner("Procesando los archivos Excel..."):
 
-            # Crear un buffer en memoria RAM para construir el archivo de salida sin escribir en disco
+            # Buffer en memoria RAM para no crear archivos temporales en disco
             output_buffer = io.BytesIO()
 
-            # Usar pd.ExcelWriter junto con openpyxl para escribir en el buffer en memoria
+            # Escritor de pandas especificando el motor openpyxl
             with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
 
-                # Conjunto para rastrear nombres de hojas y evitar duplicados entre archivos distintos
+                # Control para prevenir nombres de hojas duplicados
                 hojas_usadas = set()
 
                 for file in uploaded_files:
-                    # Extraer el nombre base del archivo omitiendo la extensión (.xlsx o .xls)
+                    # Extraer el nombre base del archivo sin extensión
                     nombre_base, _ = os.path.splitext(file.name)
 
-                    # Leer todas las hojas del archivo (sheet_name=None devuelve un diccionario: {nombre_hoja: DataFrame})
+                    # Leer todas las hojas del archivo actual
                     hojas_dict = pd.read_excel(file, sheet_name=None)
                     total_hojas = len(hojas_dict)
 
-                    # Recorrer cada una de las hojas leídas del archivo actual
                     for idx, (nombre_hoja_orig, df) in enumerate(
                         hojas_dict.items(), start=1
                     ):
 
-                        # Definir el nombre según la cantidad de hojas presentes
+                        # Regla de renombrado:
+                        # Si tiene 1 sola hoja: NombreArchivo
+                        # Si tiene varias hojas: NombreArchivo_1, NombreArchivo_2, etc.
                         if total_hojas == 1:
-                            # Si solo tiene una hoja, mantiene el nombre del archivo
                             nombre_propuesto = nombre_base
                         else:
-                            # Si tiene varias hojas, asigna NombreArchivo_1, NombreArchivo_2, etc.
                             nombre_propuesto = f"{nombre_base}_{idx}"
 
-                        # Limpiar caracteres prohibidos y ajustar a 31 caracteres máximo
+                        # Aplicar limpieza de caracteres y corte de 31 caracteres
                         nombre_final = sanitizar_nombre_hoja(nombre_propuesto)
 
-                        # Controlar duplicados en caso de que existan dos archivos con nombres idénticos
+                        # Evitar colisión si dos archivos tienen el mismo nombre
                         contador = 1
                         nombre_unico = nombre_final
                         while nombre_unico in hojas_usadas:
@@ -96,18 +107,16 @@ if uploaded_files:
                             nombre_unico = f"{nombre_final[:limite]}{sufijo}"
                             contador += 1
 
-                        # Registrar la hoja como procesada
                         hojas_usadas.add(nombre_unico)
 
-                        # Escribir el contenido del DataFrame en la hoja correspondiente del archivo consolidado
+                        # Escribir la hoja procesada en el archivo final
                         df.to_excel(
                             writer, sheet_name=nombre_unico, index=False
                         )
 
-            # Reposicionar el puntero de lectura del buffer al inicio
             output_buffer.seek(0)
 
-            # 4. SALIDA Y BOTÓN DE DESCARGA
+            # --- 7. DESCARGA DEL ARCHIVO GENERADO ---
             st.success("🎉 ¡Procesamiento completado con éxito!")
 
             st.download_button(
